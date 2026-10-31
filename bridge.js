@@ -44,9 +44,10 @@ const N_UNDO = 0x64
 const N_REDO = 0x65
 const N_BANK = 0x67
 const CC_CUE = 0x2f
+const CC_FADER = 7
 const N_MASTER = 0x50 // overlaps the scene-launch range only in name: scenes start at 0x52
 const CC_TEMPO = 0x0d
-const QUANTIZES = ['none', '4bar', '2bar', '1bar', '2n', '4n', '8n', '16n']
+const QUANTIZES = ['1bar', '2bar', '4bar', '2n', '4n', '8n', '16n', 'none']
 
 // mkII palette (APCColorManager)
 const C_OFF = 0
@@ -159,6 +160,7 @@ async function refreshOrder() {
   }
 }
 let orderTimer = null
+let trackNames = ''
 let sceneOffset = 0
 
 function rpc(method, params = {}) {
@@ -250,6 +252,15 @@ function onRpcLine(line) {
       return
     }
     if (topic === 'launcher') {
+      const names = payload.tracks.map((t) => t.track).join()
+      if (names !== trackNames) {
+        trackNames = names
+        clearTimeout(orderTimer)
+        orderTimer = setTimeout(() => {
+          refreshOrder()
+          knobMode.kind === 'user' ? refreshUser() : refreshMix()
+        }, 300)
+      }
       state = payload
     } else if (topic === 'transport') {
       const was = transport.playing
@@ -575,6 +586,18 @@ async function applyKnobMaps() {
       const heldNotes = new Map() // "note/ch" -> target
       const reNote = new RegExp(`^map note (\\d+) ch (\\d+) port "${VIRTUAL_PORT}" -> (\\S+)$`, 'gm')
       for (const m of dsl.matchAll(reNote)) heldNotes.set(`${m[1]}/${m[2]}`, m[3])
+      // Track faders: CC 7 on channel c+1 sets the gain of column c
+      const heldFaders = new Map() // ch -> target text
+      const reFader = new RegExp(`^map cc ${CC_FADER} ch (\\d+) port "${VIRTUAL_PORT}" -> (.+)$`, 'gm')
+      for (const m of dsl.matchAll(reFader)) heldFaders.set(Number(m[1]), m[2].trim())
+      for (let c = 0; c < COLS; c++) {
+        const t = cols()[trackOffset + c]
+        const have = heldFaders.get(c + 1)
+        const want = t ? `${t.track}.gain -inf..0db` : null
+        if (have === want) continue
+        if (have) unmaps.push(`unmap cc ${CC_FADER} ch ${c + 1} port "${VIRTUAL_PORT}"`)
+        if (want) maps.push(`map cc ${CC_FADER} ch ${c + 1} port "${VIRTUAL_PORT}" -> ${want}`)
+      }
       for (let c = 0; c < COLS; c++) {
         const t = cols()[trackOffset + c]
         for (const [note, what] of [[N_ARM, 'arm'], [N_SOLO, 'solo'], [N_MUTE, 'mute']]) {
