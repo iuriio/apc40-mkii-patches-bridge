@@ -1,0 +1,22 @@
+{
+  "name": "apc40-mkii-patches-bridge",
+  "version": "0.1.0",
+  "description": "Akai APC40 mkII as a clip launcher and mixer for Sequins Patches",
+  "main": "bridge.js",
+  "scripts": {
+    "start": "node bridge.js"
+  },
+  "keywords": [
+    "patches",
+    "sequins",
+    "apc40",
+    "midi",
+    "controller"
+  ],
+  "author": "Iuri Ribeiro",
+  "license": "LGPL-3.0-or-later",
+  "type": "commonjs",
+  "dependencies": {
+    "@julusian/midi": "^3.8.1"
+  }
+}
